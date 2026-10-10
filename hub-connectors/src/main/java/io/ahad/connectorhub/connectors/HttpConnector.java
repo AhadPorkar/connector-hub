@@ -125,51 +125,55 @@ public final class HttpConnector implements Connector,AutoCloseable {
         builder.setHeader("Content-Type",contentType);
         builder.method(method,body.length==0?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofByteArray(body));
         CompletableFuture<HttpResponse<byte[]>> future=client.sendAsync(builder.build(),info->new LimitedBody(MAX_BYTES));
+        var response=awaitResponse(future,c.timeoutMillis());
+        int status=response.statusCode();
+        if(status>=300&&status<400)throw new HubException("UPSTREAM_REDIRECT",502);
+        if(status==429||status==502||status==503||status==504)throw new HubException("UPSTREAM_UNAVAILABLE",502,true);
+        if(type.equals("SOAP")&&status==500) {
+            try {
+                if(SafeXml.hasSoapFault(SafeXml.parse(new String(response.body(),StandardCharsets.UTF_8))))throw new HubException("SOAP_FAULT",502);
+            }
+            catch(HubException fault) {
+                if(fault.code().equals("SOAP_FAULT"))throw fault;
+            }
+        }
+        if(status<200||status>=300)throw new HubException("UPSTREAM_REJECTED",502);
+        String output=Json.text(config,"responseType",type.equals("SOAP")?"XML":"JSON");
+        byte[] bytes=response.body();
+        String text=new String(bytes,StandardCharsets.UTF_8);
+        Object data;
+        if(output.equals("BINARY")) {
+            data=Map.of("contentBase64",Base64.getEncoder().encodeToString(bytes),"contentType",response.headers().firstValue("Content-Type").orElse("application/octet-stream"),"filename","download.bin");
+        }
+        else if(bytes.length==0)data=null;
+        else if(output.equals("XML")) {
+            var doc=SafeXml.parse(text);
+            if(type.equals("SOAP")&&SafeXml.hasSoapFault(doc))throw new HubException("SOAP_FAULT",502);
+            data=SafeXml.json(text);
+        }
+        else if(output.equals("TEXT"))data=text;
+        else if(output.equals("JSON")) {
+            try {
+                data=Json.parse(text);
+            }
+            catch(HubException e) {
+                throw new HubException("UPSTREAM_FORMAT",502);
+            }
+            if(type.equals("GRAPHQL")&&data instanceof Map<?,?> m&&m.get("errors") instanceof List<?> errors&&!errors.isEmpty())throw new HubException("GRAPHQL_ERROR",502);
+        }
+        else throw HubException.invalid();
+        var result=new LinkedHashMap<String,Object>();
+        result.put("data",data);
+        result.put("status",status);
+        var selectedHeaders=new LinkedHashMap<String,String>();
+        for(String h:List.of("content-type","etag","last-modified","retry-after"))response.headers().firstValue(h).ifPresent(v->selectedHeaders.put(h,v));
+        result.put("headers",selectedHeaders);
+        return result;
+    }
+    /** Shared by all HTTP protocols; tested with completed and pending futures to avoid timer races. */
+    static <T> T awaitResponse(CompletableFuture<T> future,int timeoutMillis) {
         try {
-            var response=future.get(c.timeoutMillis(),TimeUnit.MILLISECONDS);
-            int status=response.statusCode();
-            if(status>=300&&status<400)throw new HubException("UPSTREAM_REDIRECT",502);
-            if(status==429||status==502||status==503||status==504)throw new HubException("UPSTREAM_UNAVAILABLE",502,true);
-            if(type.equals("SOAP")&&status==500) {
-                try {
-                    if(SafeXml.hasSoapFault(SafeXml.parse(new String(response.body(),StandardCharsets.UTF_8))))throw new HubException("SOAP_FAULT",502);
-                }
-                catch(HubException fault) {
-                    if(fault.code().equals("SOAP_FAULT"))throw fault;
-                }
-            }
-            if(status<200||status>=300)throw new HubException("UPSTREAM_REJECTED",502);
-            String output=Json.text(config,"responseType",type.equals("SOAP")?"XML":"JSON");
-            byte[] bytes=response.body();
-            String text=new String(bytes,StandardCharsets.UTF_8);
-            Object data;
-            if(output.equals("BINARY")) {
-                data=Map.of("contentBase64",Base64.getEncoder().encodeToString(bytes),"contentType",response.headers().firstValue("Content-Type").orElse("application/octet-stream"),"filename","download.bin");
-            }
-            else if(bytes.length==0)data=null;
-            else if(output.equals("XML")) {
-                var doc=SafeXml.parse(text);
-                if(type.equals("SOAP")&&SafeXml.hasSoapFault(doc))throw new HubException("SOAP_FAULT",502);
-                data=SafeXml.json(text);
-            }
-            else if(output.equals("TEXT"))data=text;
-            else if(output.equals("JSON")) {
-                try {
-                    data=Json.parse(text);
-                }
-                catch(HubException e) {
-                    throw new HubException("UPSTREAM_FORMAT",502);
-                }
-                if(type.equals("GRAPHQL")&&data instanceof Map<?,?> m&&m.get("errors") instanceof List<?> errors&&!errors.isEmpty())throw new HubException("GRAPHQL_ERROR",502);
-            }
-            else throw HubException.invalid();
-            var result=new LinkedHashMap<String,Object>();
-            result.put("data",data);
-            result.put("status",status);
-            var selectedHeaders=new LinkedHashMap<String,String>();
-            for(String h:List.of("content-type","etag","last-modified","retry-after"))response.headers().firstValue(h).ifPresent(v->selectedHeaders.put(h,v));
-            result.put("headers",selectedHeaders);
-            return result;
+            return future.get(timeoutMillis,TimeUnit.MILLISECONDS);
         }
         catch(TimeoutException e) {
             future.cancel(true);
@@ -184,6 +188,12 @@ public final class HttpConnector implements Connector,AutoCloseable {
             Throwable cause=e.getCause();
             while(cause!=null) {
                 if(cause instanceof HubException h)throw h;
+                // HttpClient's own timer can win the race with future.get's timer.
+                // Its request/connect timeout then arrives inside ExecutionException.
+                if(cause instanceof HttpTimeoutException) {
+                    future.cancel(true);
+                    throw new HubException("UPSTREAM_TIMEOUT",504,true);
+                }
                 cause=cause.getCause();
             }
             throw new HubException("UPSTREAM_UNAVAILABLE",502,true);

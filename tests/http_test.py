@@ -262,6 +262,39 @@ class HubHTTP(unittest.TestCase):
         self.assertEqual("UPSTREAM_REDIRECT", self.execute(p, status=502)["error"]["code"])
     def test_timeout_is_bounded(self):
         p = self.provider(config={"method": "GET", "path": "/slow"}, timeoutMs=100)
+        started = time.monotonic()
+        self.assertEqual("UPSTREAM_TIMEOUT", self.execute(p, status=504)["error"]["code"])
+        # Allow scheduler/CI overhead, but do not permit an unbounded transport wait.
+        self.assertLess(time.monotonic() - started, 5.0)
+    def test_timeout_read_preserves_recorded_status_for_same_key(self):
+        p = self.provider(config={"method": "GET", "path": "/slow"}, timeoutMs=100)
+        key = "read-timeout-" + uuid.uuid4().hex
+        for _ in range(2):
+            self.assertEqual("UPSTREAM_TIMEOUT", self.execute(p, key=key, status=504)["error"]["code"])
+        entry = next(e for e in self.ok("GET", "/api/idempotency") if e["providerId"] == p["id"])
+        self.assertEqual("FAILED", entry["status"])
+        self.assertEqual("UPSTREAM_TIMEOUT", entry["code"])
+        self.assertEqual(504, entry["httpStatus"])
+    def test_timeout_write_remains_unknown(self):
+        p = self.provider(operation="CREATE", config={"method": "POST", "path": "/slow"}, timeoutMs=100, maxAttempts=4)
+        key = "write-timeout-" + uuid.uuid4().hex
+        self.assertEqual("UPSTREAM_TIMEOUT", self.execute(p, key=key, status=504)["error"]["code"])
+        self.assertEqual("EXECUTION_UNKNOWN", self.execute(p, key=key, status=409)["error"]["code"])
+        entry = next(e for e in self.ok("GET", "/api/idempotency") if e["providerId"] == p["id"])
+        self.assertEqual("UNKNOWN", entry["status"])
+        self.assertEqual("UPSTREAM_TIMEOUT", entry["code"])
+        self.assertEqual(504, entry["httpStatus"])
+    def test_slow_upstream_with_sufficient_timeout_succeeds(self):
+        p = self.provider(config={"method": "GET", "path": "/slow"}, timeoutMs=5000)
+        self.assertTrue(self.execute(p)["data"]["slow"])
+    def test_soap_transport_timeout(self):
+        p = self.provider("SOAP", config={"path": "/slow", "envelope": "<Envelope/>"}, timeoutMs=100)
+        self.assertEqual("UPSTREAM_TIMEOUT", self.execute(p, key="soap-timeout-001", status=504)["error"]["code"])
+    def test_graphql_transport_timeout(self):
+        p = self.provider("GRAPHQL", config={"path": "/slow", "document": "{ workOrders { id } }"}, timeoutMs=100)
+        self.assertEqual("UPSTREAM_TIMEOUT", self.execute(p, key="graphql-timeout-001", status=504)["error"]["code"])
+    def test_odata_transport_timeout(self):
+        p = self.provider("ODATA", config={"method": "GET", "path": "/slow"}, timeoutMs=100)
         self.assertEqual("UPSTREAM_TIMEOUT", self.execute(p, status=504)["error"]["code"])
     def test_invalid_upstream_json_is_sanitized(self):
         p = self.provider(config={"method": "GET", "path": "/invalid-json"})

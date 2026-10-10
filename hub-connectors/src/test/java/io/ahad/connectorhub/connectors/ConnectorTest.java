@@ -3,6 +3,8 @@ import io.ahad.connectorhub.core.*;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
 import java.io.*;
+import java.net.http.*;
+import java.util.concurrent.*;
 import java.util.*;
 import static io.ahad.connectorhub.core.TestKit.*;
 public final class ConnectorTest {
@@ -17,6 +19,7 @@ public final class ConnectorTest {
         redis();
         local();
         metadata();
+        httpTimeouts();
         T.finish(args.length==0?"build/reports/connectors.xml":args[0]);
     }
     static void xml() {
@@ -128,5 +131,73 @@ public final class ConnectorTest {
             }
         }
         );
+    }
+    static void httpTimeouts() {
+        T.test("HTTP completed future returns its value",()-> {
+            Object expected=new Object();
+            yes(expected==HttpConnector.awaitResponse(CompletableFuture.completedFuture(expected),100));
+        });
+        T.test("HTTP pending future expires with 504 and is cancelled",()-> {
+            var future=new CompletableFuture<Object>();
+            HubException failure=transportFailure(future,10);
+            eq("UPSTREAM_TIMEOUT",failure.code());
+            eq(504,failure.status());
+            yes(failure.transientFailure());
+            yes(future.isCancelled());
+        });
+        T.test("HTTP request timeout wrapped by get maps to 504",()->
+            assertTransportFailure(new HttpTimeoutException("synthetic request timeout"),"UPSTREAM_TIMEOUT",504,true));
+        T.test("HTTP completion wrapper preserves request timeout",()->
+            assertTransportFailure(new CompletionException(new HttpTimeoutException("synthetic timeout")),"UPSTREAM_TIMEOUT",504,true));
+        T.test("HTTP nested asynchronous timeout maps to 504",()->
+            assertTransportFailure(new IOException("wrapper",new CompletionException(new HttpTimeoutException("synthetic timeout"))),"UPSTREAM_TIMEOUT",504,true));
+        T.test("HTTP connection timeout subclass maps to 504",()->
+            assertTransportFailure(new HttpConnectTimeoutException("synthetic connect timeout"),"UPSTREAM_TIMEOUT",504,true));
+        T.test("HTTP nested connection timeout maps to 504",()->
+            assertTransportFailure(new CompletionException(new IOException("wrapper",new HttpConnectTimeoutException("synthetic timeout"))),"UPSTREAM_TIMEOUT",504,true));
+        T.test("HTTP body-limit exception retains code status and identity",()-> {
+            var expected=new HubException("UPSTREAM_TOO_LARGE",502);
+            HubException actual=transportFailure(CompletableFuture.failedFuture(new IOException("wrapper",expected)),100);
+            yes(expected==actual);
+            eq("UPSTREAM_TOO_LARGE",actual.code());
+            eq(502,actual.status());
+            yes(!actual.transientFailure());
+        });
+        T.test("HTTP generic IO failure remains 502",()->
+            assertTransportFailure(new IOException("synthetic socket failure"),"UPSTREAM_UNAVAILABLE",502,true));
+        T.test("HTTP error text alone is not classified as a timeout",()->
+            assertTransportFailure(new IOException("HttpTimeoutException timeout"),"UPSTREAM_UNAVAILABLE",502,true));
+        T.test("HTTP exceptional completion without a cause remains 502",()->
+            assertTransportFailure(new ExecutionException((Throwable)null),"UPSTREAM_UNAVAILABLE",502,true));
+        T.test("HTTP interruption cancels future and preserves interrupt status",()-> {
+            var future=new CompletableFuture<Object>();
+            try {
+                Thread.currentThread().interrupt();
+                HubException failure=transportFailure(future,100);
+                eq("INTERRUPTED",failure.code());
+                eq(503,failure.status());
+                yes(!failure.transientFailure());
+                yes(future.isCancelled());
+                yes(Thread.currentThread().isInterrupted());
+            }
+            finally {
+                Thread.interrupted();
+            }
+        });
+    }
+    private static void assertTransportFailure(Throwable cause,String code,int status,boolean transientFailure) {
+        HubException failure=transportFailure(CompletableFuture.failedFuture(cause),100);
+        eq(code,failure.code());
+        eq(status,failure.status());
+        eq(transientFailure,failure.transientFailure());
+    }
+    private static HubException transportFailure(CompletableFuture<?> future,int timeoutMillis) {
+        try {
+            HttpConnector.awaitResponse(future,timeoutMillis);
+        }
+        catch(HubException failure) {
+            return failure;
+        }
+        throw new AssertionError("Expected a transport failure");
     }
 }

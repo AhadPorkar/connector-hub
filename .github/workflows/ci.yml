@@ -9,6 +9,8 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     strategy:
+      # Collect both JDK results even when one matrix job fails.
+      fail-fast: false
       matrix:
         java: ['21', '25']
     steps:
