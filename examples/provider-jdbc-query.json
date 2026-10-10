@@ -1,0 +1,22 @@
+{
+  "name": "Jdbc Record By Id",
+  "slug": "jdbc-record-by-id",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "QUERY",
+  "parameters": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "sql": "SELECT \"ID\", \"NAME\" FROM \"CH_ACCEPTANCE\" WHERE \"ID\" = :id"
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

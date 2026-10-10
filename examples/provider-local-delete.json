@@ -1,0 +1,28 @@
+{
+  "name": "Local Record Delete",
+  "slug": "local-record-delete",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "DELETE",
+  "parameters": [
+    {
+      "name": "id",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    },
+    {
+      "name": "expectedVersion",
+      "type": "INTEGER",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "collection": "example_records"
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

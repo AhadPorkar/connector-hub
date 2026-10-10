@@ -1,0 +1,25 @@
+{
+  "name": "Mongodb Record Create",
+  "slug": "mongodb-record-create",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "CREATE",
+  "parameters": [
+    {
+      "name": "name",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "collection": "records",
+    "body": {
+      "name": "${name}"
+    }
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

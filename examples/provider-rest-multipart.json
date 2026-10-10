@@ -1,0 +1,25 @@
+{
+  "name": "Rest File",
+  "slug": "rest-file",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "EXECUTE",
+  "parameters": [],
+  "config": {
+    "method": "POST",
+    "path": "/echo",
+    "bodyMode": "MULTIPART",
+    "body": {
+      "description": "synthetic sample",
+      "file": {
+        "filename": "sample.txt",
+        "contentType": "text/plain",
+        "contentBase64": "aGVsbG8="
+      }
+    }
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

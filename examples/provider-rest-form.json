@@ -1,0 +1,27 @@
+{
+  "name": "Rest Form",
+  "slug": "rest-form",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "EXECUTE",
+  "parameters": [
+    {
+      "name": "message",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "method": "POST",
+    "path": "/echo",
+    "bodyMode": "FORM",
+    "body": {
+      "message": "${message}"
+    }
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

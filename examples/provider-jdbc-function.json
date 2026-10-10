@@ -1,0 +1,30 @@
+{
+  "name": "Jdbc Calculate Tax",
+  "slug": "jdbc-calculate-tax",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "FUNCTION",
+  "parameters": [
+    {
+      "name": "amount",
+      "type": "DECIMAL",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "routine": "calculate_tax",
+    "returnType": "DECIMAL",
+    "routineParameters": [
+      {
+        "name": "amount",
+        "mode": "IN",
+        "type": "DECIMAL"
+      }
+    ]
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

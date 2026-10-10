@@ -1,0 +1,17 @@
+{
+  "name": "Graphql Orders",
+  "slug": "graphql-orders",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "READ",
+  "parameters": [],
+  "config": {
+    "path": "/graphql",
+    "document": "query WorkOrders { workOrders { id status priority } }",
+    "variables": {}
+  },
+  "fieldsRoot": "/data/data/workOrders",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

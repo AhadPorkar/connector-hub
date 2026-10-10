@@ -1,0 +1,12 @@
+services:
+  hub:
+    build: .
+    command: ["--demo"]
+    ports: ["127.0.0.1:8080:8080"]
+    volumes: ["hub-demo-data:/app/var"]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+volumes:
+  hub-demo-data:

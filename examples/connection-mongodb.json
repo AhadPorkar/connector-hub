@@ -1,0 +1,14 @@
+{
+  "name": "MongoDB isolated lab",
+  "type": "MONGODB",
+  "config": {
+    "url": "mongodb://127.0.0.1:27017",
+    "database": "hub_lab",
+    "authSource": "admin",
+    "tls": false
+  },
+  "secrets": {
+    "username": "hub_test",
+    "password": "SET_VIA_SECRET_MANAGER"
+  }
+}

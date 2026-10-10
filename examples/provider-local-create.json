@@ -1,0 +1,23 @@
+{
+  "name": "Local Record Create",
+  "slug": "local-record-create",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "CREATE",
+  "parameters": [
+    {
+      "name": "record",
+      "type": "JSON",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "collection": "example_records",
+    "body": "${record}"
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

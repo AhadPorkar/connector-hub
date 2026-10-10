@@ -1,0 +1,8 @@
+{
+  "name": "GRAPHQL local simulator",
+  "type": "GRAPHQL",
+  "config": {
+    "baseUrl": "http://127.0.0.1:9091",
+    "authType": "NONE"
+  }
+}

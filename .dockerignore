@@ -1,0 +1,10 @@
+build
+target
+**/target
+.git
+var
+.env
+**/__pycache__
+drivers/*.jar
+plugins/*.jar
+.venv

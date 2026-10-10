@@ -1,0 +1,18 @@
+{
+  "name": "Rest Customer List",
+  "slug": "rest-customer-list",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "READ",
+  "parameters": [],
+  "config": {
+    "method": "GET",
+    "path": "/customers",
+    "query": {},
+    "responseType": "JSON"
+  },
+  "fieldsRoot": "/data/items",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 3,
+  "rateLimit": 120
+}

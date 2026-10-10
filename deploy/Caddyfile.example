@@ -1,0 +1,7 @@
+# Replace the hostname; run the hub bound to loopback on this host.
+# Separate-host/container proxy deployments need an explicitly restricted private route.
+hub.example.com {
+    encode zstd gzip
+    header Strict-Transport-Security "max-age=31536000"
+    reverse_proxy 127.0.0.1:8080
+}

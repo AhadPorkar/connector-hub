@@ -1,0 +1,28 @@
+{
+  "name": "Local Record Read",
+  "slug": "local-record-read",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "READ",
+  "parameters": [
+    {
+      "name": "id",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": false
+    },
+    {
+      "name": "search",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": false
+    }
+  ],
+  "config": {
+    "collection": "example_records"
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 2,
+  "rateLimit": 120
+}

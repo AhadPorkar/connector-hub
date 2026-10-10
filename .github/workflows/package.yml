@@ -1,0 +1,25 @@
+name: Package reviewed build
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: bash scripts/test.sh
+      - run: sha256sum build/connector-hub.jar > build/SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: connector-hub-reviewed-build
+          path: |
+            build/connector-hub.jar
+            build/SHA256SUMS
+            build/reports/

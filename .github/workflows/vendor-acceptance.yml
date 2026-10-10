@@ -1,0 +1,42 @@
+# Opt-in destructive acceptance against disposable services, never customer databases.
+name: PostgreSQL acceptance (manual)
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: hub_acceptance
+          POSTGRES_USER: hub_test
+          POSTGRES_PASSWORD: disposable-ci-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hub_test -d hub_acceptance"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: bash scripts/test.sh
+      - run: mvn -B -f drivers/pom.xml -Ppostgres dependency:copy-dependencies
+      - run: bash scripts/test-jdbc.sh
+        env:
+          HUB_ALLOW_DESTRUCTIVE_TESTS: 'true'
+          HUB_TEST_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/hub_acceptance
+          HUB_TEST_JDBC_DRIVER: org.postgresql.Driver
+          HUB_TEST_JDBC_USER: hub_test
+          HUB_TEST_JDBC_PASSWORD: disposable-ci-password
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: postgres-acceptance
+          path: build/reports/jdbc.xml

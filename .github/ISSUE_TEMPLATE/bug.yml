@@ -1,0 +1,22 @@
+name: Reproducible defect / Fehler / Bug report
+description: Report verified behavior without credentials or customer data.
+# Standard issue form fields.
+title: '[Bug] '
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction / Reproduktion
+      description: Include version, JDK, connector and synthetic input. No secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence and request ID

@@ -1,0 +1,28 @@
+{
+  "name": "Redis Update",
+  "slug": "redis-update",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "UPDATE",
+  "parameters": [
+    {
+      "name": "key",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    },
+    {
+      "name": "value",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "ttlSeconds": 3600
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

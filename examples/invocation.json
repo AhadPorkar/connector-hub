@@ -1,0 +1,12 @@
+{
+  "input": {
+    "name": "Synthetic customer"
+  },
+  "page": {
+    "index": 0,
+    "size": 25,
+    "filters": [],
+    "orders": []
+  },
+  "async": false
+}

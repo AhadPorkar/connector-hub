@@ -1,0 +1,34 @@
+{
+  "name": "Jdbc Calculate Total",
+  "slug": "jdbc-calculate-total",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "PROCEDURE",
+  "parameters": [
+    {
+      "name": "orderId",
+      "type": "INTEGER",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "routine": "calculate_total",
+    "routineParameters": [
+      {
+        "name": "orderId",
+        "mode": "IN",
+        "type": "INTEGER"
+      },
+      {
+        "name": "total",
+        "mode": "OUT",
+        "type": "DECIMAL"
+      }
+    ]
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

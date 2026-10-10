@@ -1,0 +1,35 @@
+{
+  "name": "Local Record Update",
+  "slug": "local-record-update",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "UPDATE",
+  "parameters": [
+    {
+      "name": "id",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    },
+    {
+      "name": "expectedVersion",
+      "type": "INTEGER",
+      "source": "INPUT",
+      "required": true
+    },
+    {
+      "name": "record",
+      "type": "JSON",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "collection": "example_records",
+    "body": "${record}"
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Redis isolated lab",
+  "type": "REDIS",
+  "config": {
+    "url": "redis://127.0.0.1:6379",
+    "namespace": "lab",
+    "database": 0
+  },
+  "secrets": {
+    "password": "SET_VIA_SECRET_MANAGER"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "Soap Calculator",
+  "slug": "soap-calculator",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "EXECUTE",
+  "parameters": [
+    {
+      "name": "a",
+      "type": "INTEGER",
+      "source": "INPUT",
+      "required": true
+    },
+    {
+      "name": "b",
+      "type": "INTEGER",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "path": "/soap",
+    "soapVersion": "1.1",
+    "soapAction": "urn:demo/Add",
+    "envelope": "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:d=\"urn:demo\"><s:Body><d:Add><d:a>${a}</d:a><d:b>${b}</d:b></d:Add></s:Body></s:Envelope>"
+  },
+  "fieldsRoot": "/data/Envelope/Body/AddResponse/AddResult",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

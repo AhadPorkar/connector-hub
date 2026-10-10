@@ -1,0 +1,16 @@
+{
+  "name": "Odata Products",
+  "slug": "odata-products",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "READ",
+  "parameters": [],
+  "config": {
+    "method": "GET",
+    "path": "/odata/Products"
+  },
+  "fieldsRoot": "/data/value",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 2,
+  "rateLimit": 120
+}

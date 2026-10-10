@@ -1,0 +1,35 @@
+{
+  "name": "Rest Echo",
+  "slug": "rest-echo",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "EXECUTE",
+  "parameters": [
+    {
+      "name": "message",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    },
+    {
+      "name": "tenant",
+      "type": "STRING",
+      "source": "SYSTEM",
+      "value": "tenant",
+      "required": true
+    }
+  ],
+  "config": {
+    "method": "POST",
+    "path": "/echo",
+    "bodyMode": "JSON",
+    "body": {
+      "message": "${message}",
+      "tenant": "${tenant}"
+    }
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

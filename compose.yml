@@ -1,0 +1,23 @@
+services:
+  hub:
+    build: .
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      HUB_MASTER_KEY: ${HUB_MASTER_KEY:?Set a Base64-encoded 32-byte random key}
+      HUB_ADMIN_TOKEN: ${HUB_ADMIN_TOKEN:?Set a high-entropy bootstrap token}
+      HUB_ALLOWED_ORIGINS: ${HUB_ALLOWED_ORIGINS:-}
+      HUB_ALLOW_PRIVATE: ${HUB_ALLOW_PRIVATE:-false}
+      HUB_JDBC_PREFIXES: ${HUB_JDBC_PREFIXES:-}
+      HUB_MAX_CONCURRENT: ${HUB_MAX_CONCURRENT:-32}
+    volumes:
+      - hub-data:/app/var
+      - ./drivers:/app/drivers:ro
+      - ./plugins:/app/plugins:ro
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 70s
+    restart: unless-stopped
+volumes:
+  hub-data:

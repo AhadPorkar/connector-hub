@@ -1,0 +1,12 @@
+{
+  "name": "PostgreSQL isolated lab",
+  "type": "JDBC",
+  "config": {
+    "url": "jdbc:postgresql://127.0.0.1:5432/hub_acceptance",
+    "driverClass": "org.postgresql.Driver"
+  },
+  "secrets": {
+    "username": "hub_test",
+    "password": "SET_VIA_SECRET_MANAGER"
+  }
+}

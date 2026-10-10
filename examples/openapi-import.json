@@ -1,0 +1,23 @@
+{
+  "connectionId": "REPLACE_WITH_CREATED_REST_CONNECTION_ID",
+  "document": {
+    "openapi": "3.1.1",
+    "info": {
+      "title": "Synthetic example",
+      "version": "1"
+    },
+    "paths": {
+      "/customers": {
+        "get": {
+          "operationId": "imported-customers",
+          "summary": "Imported customer list",
+          "responses": {
+            "200": {
+              "description": "Customer response"
+            }
+          }
+        }
+      }
+    }
+  }
+}

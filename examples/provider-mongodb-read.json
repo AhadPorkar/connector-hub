@@ -1,0 +1,25 @@
+{
+  "name": "Mongodb Records",
+  "slug": "mongodb-records",
+  "connectionId": "REPLACE_WITH_CREATED_CONNECTION_ID",
+  "operation": "READ",
+  "parameters": [
+    {
+      "name": "status",
+      "type": "STRING",
+      "source": "INPUT",
+      "required": true
+    }
+  ],
+  "config": {
+    "collection": "records",
+    "filter": {
+      "status": "${status}"
+    }
+  },
+  "fieldsRoot": "/data",
+  "outputMappings": [],
+  "timeoutMs": 10000,
+  "maxAttempts": 1,
+  "rateLimit": 120
+}

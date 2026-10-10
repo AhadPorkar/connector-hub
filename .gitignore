@@ -1,0 +1,17 @@
+/build/
+**/target/
+/var/
+/.env
+/.env.*
+!.env.example
+/drivers/*.jar
+/plugins/*.jar
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+*.log
