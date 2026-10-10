@@ -17,7 +17,7 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - run: bash scripts/test.sh
@@ -35,7 +35,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - shell: pwsh
@@ -53,7 +53,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - run: bash scripts/build.sh
