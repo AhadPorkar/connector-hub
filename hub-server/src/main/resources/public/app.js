@@ -78,7 +78,55 @@ async function providerEditor(provider=null){if(!connections.length)connections=
 function guidedRequest(connection,operation){let cfg={};try{cfg=JSON.parse($('#provider-config').value);}catch{}const target=$('#guided-request');let keys=[];if(['REST','ODATA'].includes(connection.type)){keys=[['method','httpMethod','select',['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS']],['path','relativePath']];}else if(connection.type==='SOAP')keys=[['path','relativePath'],['soapAction','soapAction'],['soapVersion','soapVersion','select',['1.1','1.2']]];else if(connection.type==='GRAPHQL')keys=[['path','relativePath']];else if(connection.type==='JDBC'&&['READ','CREATE','UPDATE','DELETE'].includes(operation))keys=[['table','table'],['schema','schema'],['keyColumn','keyColumn']];else if(connection.type==='LOCAL'||connection.type==='MONGODB')keys=[['collection','collection']];target.innerHTML=keys.length?`<div class="fields">${keys.map(([key,label,type,options])=>type==='select'?selectField(label,'guided-'+key,options,cfg[key]||options[0]):field(label,'guided-'+key,cfg[key]||'')).join('')}</div>`:'';for(const [key]of keys)$('#guided-'+key).onchange=ev=>{try{const config=JSON.parse($('#provider-config').value);config[key]=ev.target.value;$('#provider-config').value=pretty(config);}catch{toast(t('invalidJson'));}};}
 function sampleInput(p){const input={};for(const d of p.parameters||[]){if((d.source||'INPUT')!=='INPUT')continue;if(d.value!==undefined){input[d.name]=d.value;continue;}if(!d.required)continue;input[d.name]=d.type==='INTEGER'||d.type==='DECIMAL'?1:d.type==='BOOLEAN'?true:d.type==='JSON'?{}:d.type==='DATE'?'2026-10-10':d.type==='DATETIME'?'2026-10-10T12:00:00Z':d.name==='name'?'Demo customer':d.name==='id'?'demo-1':'example';}return input;}
 function executionDialog(provider,path=null){const destination=path||'/api/providers/'+provider.id+'/execute';modal(t('executeProvider'),provider.name,`<div class="notice ${provider.operation!=='READ'?'warning':''}">${tf(path?'publishedExecutionNotice':'draftExecutionNotice')}</div><div class="test-columns"><section>${textarea('inputJson','execution-input',pretty(sampleInput(provider)),'inputOnlyHelp',true)}<div class="fields">${field('pageIndex','execution-page',0,'number')}${field('pageSize','execution-size',50,'number')}</div>${textarea('pageFilters','execution-filters','[]','filtersHelp')}<div class="field"><label for="execution-key">${tf('idempotencyKey')}</label><div class="row"><input class="mono" id="execution-key" value="${newIdempotencyKey()}"><button id="new-key" class="button small" title="${tf('newKey')}">${icon('refresh')}</button></div></div><div class="check-field"><input type="checkbox" id="execution-async"><label for="execution-async">${tf('runAsync')}</label></div><div class="row">${btn('runProvider','run-provider','play',true)}<button id="copy-curl" class="button">${icon('copy')}cURL</button></div></section><section><div class="section-title"><h3>${tf('response')}</h3><span class="badge blue" id="execution-state">${tf('ready')}</span></div><pre class="result-box" id="execution-result">${tf('responsePlaceholder')}</pre><div id="result-actions" class="row spacer"></div><div class="notice spacer">${tf('reuseKeyNotice')}</div></section></div><div id="modal-error" class="error-message" role="alert"></div>`,'',true);
- $('#new-key').onclick=()=>{$('#execution-key').value=newIdempotencyKey();};const request=()=>({input:JSON.parse($('#execution-input').value),page:{index:Number($('#execution-page').value),size:Number($('#execution-size').value),filters:JSON.parse($('#execution-filters').value)},async:$('#execution-async').checked});$('#run-provider').onclick=async()=>{const button=$('#run-provider');button.disabled=true;$('#execution-state').textContent=t('running');$('#modal-error').textContent='';try{const result=await api(destination,{method:'POST',headers:{'Idempotency-Key':$('#execution-key').value},body:request()});$('#execution-result').textContent=pretty(result);$('#execution-state').textContent=t('status.'+(result.status||'SUCCEEDED'));$('#result-actions').innerHTML='';if(result.data?.contentBase64){$('#result-actions').innerHTML=btn('downloadFile','download-result','download');$('#download-result').onclick=()=>{const raw=atob(result.data.contentBase64);download(new Uint8Array([...raw].map(c=>c.charCodeAt(0))),result.data.filename||'download.bin',result.data.contentType||'application/octet-stream');};}if(result.id&&result.status==='QUEUED'){$('#result-actions').innerHTML=btn('viewJobs','view-jobs','clock');$('#view-jobs').onclick=()=>{closeModal();navigate('jobs');};}}catch(err){$('#execution-state').textContent=t('status.FAILED');$('#execution-result').textContent=pretty(err);$('#modal-error').textContent=err instanceof SyntaxError?t('invalidJson'):errorText(err);}finally{button.disabled=false;}};$('#copy-curl').onclick=()=>{try{const body=JSON.stringify(request()).replace(/'/g,"'\\''");copy(`curl -X POST '${location.origin+destination}' \\\n  -H 'Authorization: Bearer YOUR_SCOPED_API_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Idempotency-Key: ${$('#execution-key').value}' \\\n  --data '${body}'`);}catch{toast(t('invalidJson'));}};
+ // Capture this dialog's elements before awaiting a response. A closed/replaced
+ // dialog must not receive late results or modify a newer dialog with the same IDs.
+ const dialog=$('#modal-root .modal');
+ const find=selector=>$(selector,dialog);
+ const button=find('#run-provider');
+ const state=find('#execution-state');
+ const resultBox=find('#execution-result');
+ const actions=find('#result-actions');
+ const errorBox=find('#modal-error');
+ const keyInput=find('#execution-key');
+ find('#new-key').onclick=()=>{keyInput.value=newIdempotencyKey();};
+ const request=()=>({
+   input:JSON.parse(find('#execution-input').value),
+   page:{index:Number(find('#execution-page').value),size:Number(find('#execution-size').value),filters:JSON.parse(find('#execution-filters').value)},
+   async:find('#execution-async').checked
+ });
+ button.onclick=async()=>{
+   if(button.disabled||!dialog.isConnected)return;
+   button.disabled=true;
+   state.textContent=t('running');
+   errorBox.textContent='';
+   try{
+     const result=await api(destination,{method:'POST',headers:{'Idempotency-Key':keyInput.value},body:request()});
+     // Closing the UI does not cancel or retry an operation at the destination.
+     if(!dialog.isConnected)return;
+     resultBox.textContent=pretty(result);
+     state.textContent=t('status.'+(result.status||'SUCCEEDED'));
+     actions.innerHTML='';
+     if(result.data?.contentBase64){
+       actions.innerHTML=btn('downloadFile','download-result','download');
+       find('#download-result').onclick=()=>{
+         const raw=atob(result.data.contentBase64);
+         download(new Uint8Array([...raw].map(c=>c.charCodeAt(0))),result.data.filename||'download.bin',result.data.contentType||'application/octet-stream');
+       };
+     }
+     if(result.id&&result.status==='QUEUED'){
+       actions.innerHTML=btn('viewJobs','view-jobs','clock');
+       find('#view-jobs').onclick=()=>{closeModal();navigate('jobs');};
+     }
+   }catch(err){
+     if(!dialog.isConnected)return;
+     state.textContent=t('status.FAILED');
+     resultBox.textContent=pretty(err);
+     errorBox.textContent=err instanceof SyntaxError?t('invalidJson'):errorText(err);
+   }finally{
+     if(dialog.isConnected)button.disabled=false;
+   }
+ };
+ $('#copy-curl').onclick=()=>{try{const body=JSON.stringify(request()).replace(/'/g,"'\\''");copy(`curl -X POST '${location.origin+destination}' \\\n  -H 'Authorization: Bearer YOUR_SCOPED_API_KEY' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Idempotency-Key: ${keyInput.value}' \\\n  --data '${body}'`);}catch{toast(t('invalidJson'));}};
 }
 async function servicePage(target){const contract=await api('/api/openapi');let pubs=[];if(['ADMIN','DESIGNER'].includes(me.role))pubs=await api('/api/publications');publications=pubs;const services=Object.entries(contract.paths);target.innerHTML=head('servicesTitle','servicesDesc',btn('downloadOpenApi','download-openapi','download'))+`<div class="notice">${tf('serviceUrlNotice')}</div><div class="catalog-grid">${services.map(([path,item])=>`<article class="panel connector-card"><div class="row spread"><span class="badge success">POST</span><span class="badge blue">${tf('published')}</span></div><h3>${e(item.post.summary)}</h3><div class="endpoint">${e(path)}</div><div class="row spread"><button class="button small primary" data-service-run="${e(path)}">${icon('play')}${tf('invoke')}</button><button class="button small" data-copy-path="${e(path)}">${icon('copy')}${tf('copyUrl')}</button>${pubs.some(p=>p.path===path)?`<button class="icon-btn" data-unpublish="${e(pubs.find(p=>p.path===path).id)}" title="${tf('unpublish')}" aria-label="${tf('unpublish')}">${icon('trash')}</button>`:''}</div></article>`).join('')||empty('noPublishedServices')}</div>`;$('#download-openapi').onclick=()=>download(pretty(contract),'connector-hub.openapi.json','application/json');$$('[data-copy-path]').forEach(b=>b.onclick=()=>copy(location.origin+b.dataset.copyPath));$$('[data-service-run]').forEach(b=>b.onclick=()=>{const path=b.dataset.serviceRun,operation=contract.paths[path].post;const schema=operation.requestBody.content['application/json'].schema.properties.input;const parameters=Object.entries(schema.properties).map(([name,s])=>({name,type:s.type==='integer'?'INTEGER':s.type==='number'?'DECIMAL':s.type==='boolean'?'BOOLEAN':s.type==='string'?'STRING':'JSON',source:'INPUT',required:schema.required?.includes(name)}));executionDialog({name:operation.summary,operation:'EXECUTE',parameters},path);});$$('[data-unpublish]').forEach(b=>b.onclick=async()=>{if(!confirm(t('confirmUnpublish')))return;try{await api('/api/publications/'+b.dataset.unpublish,{method:'DELETE'});await renderPage();}catch(err){toast(errorText(err));}});}
 async function importOpenApi(){modal(t('importOpenApi'),t('importNotice'),`${selectField('connection','import-connection',connections.filter(c=>['REST','ODATA'].includes(c.type)).map(c=>[c.id,c.name]),'')}${textarea('openApiDocument','import-document','{"openapi":"3.1.1","paths":{}}','jsonOnly',true)}<div id="modal-error" class="error-message" role="alert"></div>`,`<span class="small-text muted">${tf('importDraftsOnly')}</span>${btn('importDrafts','perform-import','download',true)}`,true);$('#perform-import').onclick=async()=>{try{const result=await api('/api/import/openapi',{method:'POST',body:{connectionId:$('#import-connection').value,document:JSON.parse($('#import-document').value)}});closeModal();toast(num(result.length)+' '+t('providersCreated'));await renderPage();}catch(err){$('#modal-error').textContent=err instanceof SyntaxError?t('invalidJson'):errorText(err);}};}

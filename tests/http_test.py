@@ -103,6 +103,9 @@ class HubHTTP(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual("nosniff", headers["x-content-type-options"])
         self.assertIn("default-src 'none'", headers["content-security-policy"])
+        self.assertIn("script-src 'self'", headers["content-security-policy"])
+        self.assertNotIn("'unsafe-eval'", headers["content-security-policy"])
+        self.assertNotIn("'unsafe-inline'", headers["content-security-policy"])
         self.assertNotIn("access-control-allow-origin", headers)
         self.assertNotIn("set-cookie", headers)
     def test_static_source_not_exposed(self):

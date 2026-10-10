@@ -9,13 +9,14 @@ import base64
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import time
 import unittest
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('http_fixtures', ROOT/'tests/http_test.py')
@@ -28,18 +29,27 @@ TRANSPORT = os.environ.get('HUB_UI_TRANSPORT', 'native')
 class UI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if TRANSPORT not in ('native', 'harness'):
+            raise ValueError('HUB_UI_TRANSPORT must be native or harness')
         fixture.HubHTTP.setUpClass()
+        cls.addClassCleanup(fixture.HubHTTP.tearDownClass)
         SCREENSHOTS.mkdir(parents=True, exist_ok=True)
         cls.pw = sync_playwright().start()
+        cls.addClassCleanup(cls.pw.stop)
         options = {'headless': True}
         if os.environ.get('HUB_BROWSER_EXECUTABLE'):
             options['executable_path'] = os.environ['HUB_BROWSER_EXECUTABLE']
         cls.browser = cls.pw.chromium.launch(**options)
-        cls.page = cls.browser.new_page(viewport={'width':1440,'height':1050})
-        cls.page.set_default_timeout(8000)
-        cls.errors = []
-        cls.page.on('pageerror', lambda e: cls.errors.append(str(e)))
-        cls.page.on('dialog', lambda dialog: dialog.accept())
+        cls.addClassCleanup(cls.browser.close)
+
+    def setUp(self):
+        self.context = self.browser.new_context(viewport={'width':1440,'height':1050})
+        self.addCleanup(self.context.close)
+        self.page = self.context.new_page()
+        self.page.set_default_timeout(8000)
+        self.errors = []
+        self.page.on('pageerror', lambda error: self.errors.append(str(error)))
+        self.page.on('dialog', lambda dialog: dialog.accept())
         if TRANSPORT == 'harness':
             def bridge(data):
                 url = data['url']
@@ -49,35 +59,35 @@ class UI(unittest.TestCase):
                 try: response = urllib.request.urlopen(req, timeout=20)
                 except urllib.error.HTTPError as error: response = error
                 with response: return {'status':response.status, 'body':response.read().decode(), 'headers':dict(response.headers)}
-            cls.page.expose_function('httpBridge', bridge)
-            cls.page.set_content('<html><head></head><body><div id="app"></div><div id="modal-root"></div><div id="toast" role="status"></div></body></html>')
-            cls.page.add_style_tag(content=(ASSETS/'app.css').read_text())
-            cls.page.evaluate('''() => {
+            self.page.expose_function('httpBridge', bridge)
+            self.page.set_content('<html><head></head><body><div id="app"></div><div id="modal-root"></div><div id="toast" role="status"></div></body></html>')
+            self.page.add_style_tag(content=(ASSETS/'app.css').read_text())
+            self.page.evaluate('''() => {
               const memory = new Map();
               Object.defineProperty(window, 'localStorage', {value:{getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)}});
               window.fetch=async (url,o={})=>{const r=await window.httpBridge({url,method:o.method||'GET',body:o.body,headers:o.headers||{}});return new Response(r.status===204?null:r.body,{status:r.status,headers:r.headers});};
             }''')
             logo='data:image/svg+xml;base64,'+base64.b64encode((ASSETS/'favicon.svg').read_bytes()).decode()
-            cls.page.evaluate('''logo => {new MutationObserver(()=>document.querySelectorAll('img[src="/favicon.svg"]').forEach(img=>img.src=logo)).observe(document.body,{childList:true,subtree:true});}''',logo)
-            cls.page.add_script_tag(content='(async()=>{'+(ASSETS/'app.js').read_text()+'})().catch(e=>{throw e;});')
+            self.page.evaluate('''logo => {new MutationObserver(()=>document.querySelectorAll('img[src="/favicon.svg"]').forEach(img=>img.src=logo)).observe(document.body,{childList:true,subtree:true});}''',logo)
+            self.page.add_script_tag(content='(async()=>{'+(ASSETS/'app.js').read_text()+'})().catch(e=>{throw e;});')
         else:
-            cls.page.goto(fixture.HubHTTP.base)
-        cls.login()
-    @classmethod
-    def login(cls):
-        cls.page.locator('#access-token').wait_for()
-        cls.page.locator('#access-token').fill(fixture.TOKEN)
-        cls.page.locator('button[type=submit]').click()
-        cls.page.locator('.hero').wait_for()
-    @classmethod
-    def tearDownClass(cls):
-        cls.browser.close(); cls.pw.stop(); fixture.HubHTTP.tearDownClass()
-    def setUp(self):
-        if self.page.locator('#access-token').count(): self.login()
-        self.page.keyboard.press('Escape')
-        self.page.set_viewport_size({'width':1440,'height':1050})
-        self.page.locator('#language').select_option('en')
-        self.page.wait_for_timeout(120)
+            self.page.goto(fixture.HubHTTP.base)
+        self.login()
+
+    def login(self):
+        self.page.locator('#access-token').wait_for()
+        self.page.locator('#access-token').fill(fixture.TOKEN)
+        self.page.locator('button[type=submit]').click()
+        self.page.locator('.hero').wait_for()
+
+    def tearDown(self):
+        # Check each test, including ones without an explicit error assertion.
+        # Context cleanup still runs if this assertion fails.
+        if self.errors:
+            self.page.screenshot(path=str(SCREENSHOTS/(self._testMethodName+'-error.png')),full_page=True)
+            (SCREENSHOTS/(self._testMethodName+'-errors.json')).write_text(json.dumps(self.errors,indent=2))
+        self.assertEqual([],self.errors,'Uncaught JavaScript error in this test')
+
     def navigate(self, name):
         self.page.locator(f'[data-nav="{name}"]').click()
         self.page.locator('#content .loading').wait_for(state='detached')
@@ -93,7 +103,7 @@ class UI(unittest.TestCase):
         provider=fixture.HubHTTP.providers['customer-directory']
         self.page.locator(f'[data-run="{provider["id"]}"]').click()
         self.page.locator('#run-provider').click()
-        self.page.wait_for_function('document.querySelector("#execution-result").textContent.includes("SUCCEEDED")')
+        expect(self.page.locator('#execution-result')).to_contain_text('SUCCEEDED',timeout=8000)
         result=json.loads(self.page.locator('#execution-result').inner_text())
         self.assertEqual('SUCCEEDED',result['status'])
         self.assertGreater(len(result['data']),0)
@@ -103,7 +113,7 @@ class UI(unittest.TestCase):
         self.page.locator('[data-run]').first.click()
         self.page.locator('#execution-input').fill('{broken')
         self.page.locator('#run-provider').click()
-        self.page.wait_for_function('document.querySelector("#modal-error").textContent.length>0')
+        expect(self.page.locator('#modal-error')).not_to_be_empty()
         self.assertNotEqual('',self.page.locator('#modal-error').inner_text())
     def test_04_edit_provider_and_tabs(self):
         self.navigate('providers')
@@ -131,7 +141,7 @@ class UI(unittest.TestCase):
         self.navigate('settings')
         self.page.locator('#settings-json').fill('{"region":"DE","source":"browser-test"}')
         self.page.locator('#save-settings').click()
-        self.page.wait_for_timeout(180)
+        expect(self.page.locator('#toast')).to_have_class(re.compile(r'\bvisible\b'))
         value=fixture.HubHTTP.api('GET','/api/settings')[1]
         self.assertEqual('browser-test',value['source'])
     def test_07_persian_mobile_layout(self):
@@ -143,6 +153,149 @@ class UI(unittest.TestCase):
         self.assertEqual('rtl',self.page.locator('html').get_attribute('dir'))
         self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth + 1'))
         self.page.screenshot(path=str(SCREENSHOTS/'dashboard-fa-mobile.png'),full_page=True)
+    def open_execution(self):
+        self.navigate('providers')
+        provider=fixture.HubHTTP.providers['customer-directory']
+        self.page.locator(f'[data-run="{provider["id"]}"]').click()
+        return provider
+
+    def hold_execution_response(self):
+        """Hold delivery after the real server has responded; never replay a request."""
+        self.page.evaluate(r"""() => {
+          const originalFetch=window.fetch.bind(window);
+          const gate=window.__executionGate={count:0,status:null};
+          window.fetch=async (url,options={}) => {
+            if(!String(url).match(/^\/api\/providers\/[^/]+\/execute$/))
+              return originalFetch(url,options);
+            gate.count++;
+            const response=await originalFetch(url,options);
+            const body=await response.text();
+            gate.status=response.status;
+            await new Promise(resolve=>{
+              gate.release=resolve;
+              document.documentElement.setAttribute('data-execution-held','true');
+            });
+            const released=new Response(body,{status:response.status,headers:response.headers});
+            const readJson=released.json.bind(released);
+            released.json=async()=>{
+              const value=await readJson();
+              // Observe a later task, after the application's await/catch/finally.
+              setTimeout(()=>document.documentElement.setAttribute('data-execution-delivered','true'),0);
+              return value;
+            };
+            return released;
+          };
+        }""")
+
+    def start_held_execution(self, invalid=False):
+        self.hold_execution_response()
+        if invalid:
+            self.page.locator('#execution-input').fill('[]')
+        self.page.locator('#run-provider').click()
+        expect(self.page.locator('html')).to_have_attribute('data-execution-held','true')
+        status=self.page.evaluate('() => window.__executionGate.status')
+        self.assertEqual(400 if invalid else 200,status)
+        expect(self.page.locator('#run-provider')).to_be_disabled()
+
+    def release_execution_response(self):
+        self.page.evaluate('() => window.__executionGate.release()')
+        expect(self.page.locator('html')).to_have_attribute('data-execution-delivered','true')
+        self.assertEqual(1,self.page.evaluate('() => window.__executionGate.count'))
+        self.assertEqual([],self.errors)
+
+    def test_08_locator_assertions_with_strict_csp(self):
+        # The probe works even in managed-browser harness mode. It verifies the
+        # assertions under an explicit CSP, not end-to-end native navigation.
+        probe=self.context.new_page()
+        try:
+            probe.set_content("""<html><head><meta http-equiv="Content-Security-Policy"
+              content="default-src 'none'; script-src 'self'"></head><body>
+              <pre id="result">READY</pre><div id="error"></div></body></html>""")
+            probe.evaluate("""() => {setTimeout(()=>{
+              document.querySelector('#result').textContent='SUCCEEDED';
+              document.querySelector('#error').textContent='validation error';
+            },50);}""")
+            expect(probe.locator('#result')).to_contain_text('SUCCEEDED')
+            expect(probe.locator('#error')).not_to_be_empty()
+        finally:
+            probe.close()
+
+    def test_09_server_error_is_displayed(self):
+        self.open_execution()
+        self.page.locator('#execution-input').fill('[]')
+        self.page.locator('#run-provider').click()
+        expect(self.page.locator('#modal-error')).not_to_be_empty()
+        expect(self.page.locator('#execution-result')).to_contain_text('INVALID_INPUT')
+        expect(self.page.locator('#run-provider')).to_be_enabled()
+
+    def test_10_close_during_successful_execution(self):
+        self.open_execution()
+        self.start_held_execution()
+        self.page.locator('#modal-close').click()
+        self.release_execution_response()
+        expect(self.page.locator('[role="dialog"]')).to_have_count(0)
+
+    def test_11_close_during_failed_execution(self):
+        self.open_execution()
+        self.start_held_execution(invalid=True)
+        self.page.keyboard.press('Escape')
+        self.release_execution_response()
+        expect(self.page.locator('[role="dialog"]')).to_have_count(0)
+
+    def test_12_success_does_not_overwrite_new_dialog(self):
+        provider=self.open_execution()
+        self.start_held_execution()
+        self.page.locator('#modal-close').click()
+        self.page.locator(f'[data-run="{provider["id"]}"]').click()
+        expected=self.page.locator('#execution-result').inner_text()
+        key=self.page.locator('#execution-key').input_value()
+        self.release_execution_response()
+        expect(self.page.locator('#execution-result')).to_have_text(expected)
+        expect(self.page.locator('#execution-key')).to_have_value(key)
+        expect(self.page.locator('#modal-error')).to_be_empty()
+        expect(self.page.locator('#run-provider')).to_be_enabled()
+
+    def test_13_error_does_not_overwrite_new_dialog(self):
+        provider=self.open_execution()
+        self.start_held_execution(invalid=True)
+        self.page.locator('#modal-close').click()
+        self.page.locator(f'[data-run="{provider["id"]}"]').click()
+        expected=self.page.locator('#execution-result').inner_text()
+        self.release_execution_response()
+        expect(self.page.locator('#execution-result')).to_have_text(expected)
+        expect(self.page.locator('#modal-error')).to_be_empty()
+        expect(self.page.locator('#run-provider')).to_be_enabled()
+
+    def test_14_language_change_during_execution(self):
+        self.open_execution()
+        self.start_held_execution()
+        # Language switching closes the dialog in bindLanguage. Dispatch the
+        # event programmatically because the modal blocks a physical click.
+        self.page.locator('#language').select_option('fa',force=True)
+        expect(self.page.locator('html')).to_have_attribute('lang','fa')
+        expect(self.page.locator('[role="dialog"]')).to_have_count(0)
+        self.release_execution_response()
+        expect(self.page.locator('html')).to_have_attribute('dir','rtl')
+
+    def test_15_inflight_execution_disables_run_button(self):
+        self.open_execution()
+        self.start_held_execution()
+        # Disabled controls must not dispatch another click/request.
+        self.page.locator('#run-provider').evaluate('(button)=>button.click()')
+        self.release_execution_response()
+        expect(self.page.locator('#execution-result')).to_contain_text('SUCCEEDED')
+        expect(self.page.locator('#run-provider')).to_be_enabled()
+
+    def test_16_successful_execution_can_run_again(self):
+        self.open_execution()
+        self.page.locator('#run-provider').click()
+        expect(self.page.locator('#execution-result')).to_contain_text('SUCCEEDED')
+        expect(self.page.locator('#run-provider')).to_be_enabled()
+        self.page.locator('#new-key').click()
+        self.page.locator('#run-provider').click()
+        expect(self.page.locator('#execution-result')).to_contain_text('SUCCEEDED')
+        expect(self.page.locator('#run-provider')).to_be_enabled()
+
     def test_98_logout_clears_session(self):
         self.page.locator('#logout').click()
         self.page.locator('#access-token').wait_for()
@@ -173,17 +326,30 @@ for language in ('en','de','fa'):
         setattr(UI,f'test_view_{language}_{name}',page_case(language,name))
 
 class Report(unittest.TextTestResult):
-    def startTest(self,test): super().startTest(test); self.started=time.perf_counter()
-    def addSuccess(self,test): super().addSuccess(test); self.record(test,None)
-    def addFailure(self,test,err): super().addFailure(test,err); self.record(test,self._exc_info_to_string(err,test))
-    def addError(self,test,err): super().addError(test,err); self.record(test,self._exc_info_to_string(err,test))
-    def record(self,test,error):
-        case=ET.SubElement(report,'testcase',{'name':test.id(),'classname':'ui.'+TRANSPORT,'time':str(time.perf_counter()-self.started)})
-        if error: ET.SubElement(case,'failure').text=error
+    def startTest(self,test):
+        super().startTest(test)
+        self.started=time.perf_counter()
+    def addSuccess(self,test):
+        super().addSuccess(test)
+        self.record(test)
+    def addFailure(self,test,err):
+        super().addFailure(test,err)
+        self.record(test,'failure',self._exc_info_to_string(err,test))
+    def addError(self,test,err):
+        super().addError(test,err)
+        self.record(test,'error',self._exc_info_to_string(err,test))
+    def addSkip(self,test,reason):
+        super().addSkip(test,reason)
+        self.record(test,'skipped',reason)
+    def record(self,test,kind=None,detail=None):
+        elapsed=max(0,time.perf_counter()-getattr(self,'started',time.perf_counter()))
+        case=ET.SubElement(report,'testcase',{'name':test.id(),'classname':'ui.'+TRANSPORT,'time':str(elapsed)})
+        if kind:
+            ET.SubElement(case,kind).text=detail
 report=ET.Element('testsuite',{'name':'browser-'+TRANSPORT})
 if __name__=='__main__':
     result=unittest.TextTestRunner(verbosity=2,resultclass=Report).run(unittest.defaultTestLoader.loadTestsFromTestCase(UI))
-    report.set('tests',str(result.testsRun));report.set('failures',str(len(result.failures)));report.set('errors',str(len(result.errors)))
+    report.set('tests',str(len(report.findall('testcase'))));report.set('failures',str(len(result.failures)));report.set('errors',str(len(result.errors)));report.set('skipped',str(len(result.skipped)))
     (ROOT/'build/reports').mkdir(parents=True,exist_ok=True)
     ET.ElementTree(report).write(ROOT/'build/reports/browser.xml',encoding='utf-8',xml_declaration=True)
     raise SystemExit(0 if result.wasSuccessful() else 1)
